@@ -3,7 +3,7 @@ import { startTryOn, type GarmentCategory } from "@/lib/perfectcorp";
 import { uploadToImgBb } from "@/lib/imgbb";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 interface TryOnBody {
   category: GarmentCategory;

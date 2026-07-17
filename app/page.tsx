@@ -2,11 +2,9 @@ import Link from "next/link";
 import {
   HeroArt,
   ArtTryOn,
-  ArtSkin,
   ArtProfile,
   ArtSizing,
   IconShirt,
-  IconSkin,
   IconProfile,
   IconRuler,
   IconArrow,
@@ -16,8 +14,8 @@ export default function Home() {
   return (
     <main>
       {/* Hero */}
-      <section className="relative overflow-hidden">
-        <div className="mx-auto grid max-w-6xl items-center gap-6 px-5 py-8 sm:py-12 md:grid-cols-2">
+      <section className="relative overflow-hidden pb-12 sm:pb-16">
+        <div className="mx-auto grid max-w-5xl items-center gap-6 px-5 py-10 sm:py-14 md:grid-cols-2">
           <div className="animate-pop text-center md:text-left">
             <div className="mx-auto mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-white/70">
               <span className="h-2 w-2 rounded-full bg-accent-2" />
@@ -27,8 +25,8 @@ export default function Home() {
               See it. <span className="gradient-text">Score it.</span> Wear it.
             </h1>
             <p className="mx-auto mt-5 max-w-xl text-base text-white/60">
-              Try clothes &amp; shoes on your photo, read a <strong>Fit Confidence</strong> score,
-              and check your skin — before you buy.
+              Try clothes &amp; shoes on your photo and read a <strong>Fit Confidence</strong> score
+              before you buy.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3 md:justify-start">
               <Link
@@ -36,12 +34,6 @@ export default function Home() {
                 className="rounded-xl bg-accent px-6 py-3 font-semibold text-white transition hover:opacity-90"
               >
                 Try on &amp; score
-              </Link>
-              <Link
-                href="/skin"
-                className="rounded-xl bg-white/10 px-6 py-3 font-semibold text-white transition hover:bg-white/20"
-              >
-                Analyze skin
               </Link>
             </div>
           </div>
@@ -56,8 +48,8 @@ export default function Home() {
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             { n: "1", t: "Upload", s: "Selfie + a product shot" },
-            { n: "2", t: "AI renders", s: "YouCam try-on & skin" },
-            { n: "3", t: "Get your score", s: "Fit & skin confidence" },
+            { n: "2", t: "AI renders", s: "YouCam try-on" },
+            { n: "3", t: "Get your score", s: "Fit confidence" },
           ].map((s) => (
             <div key={s.n} className="glass flex items-center gap-4 rounded-2xl p-5">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-lg font-black text-white">
@@ -74,7 +66,7 @@ export default function Home() {
 
       {/* Features */}
       <section className="mx-auto max-w-5xl px-5 pb-16">
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
+        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <Feature
             icon={<ArtTryOn className="h-16 w-20" />}
             badge={<IconShirt className="h-3.5 w-3.5" />}
@@ -83,15 +75,6 @@ export default function Home() {
             body="YouCam renders the look, FitDNA scores the fit 0–100 with a size & plain reasoning."
             href="/try-on"
             cta="Try on"
-          />
-          <Feature
-            icon={<ArtSkin className="h-16 w-20" />}
-            badge={<IconSkin className="h-3.5 w-3.5" />}
-            title="Skin Analysis"
-            tag="Skin AI"
-            body="YouCam scores wrinkles, pores, oil & more. We turn it into a Skin Confidence summary."
-            href="/skin"
-            cta="Analyze"
           />
           <Feature
             icon={<ArtProfile className="h-16 w-20" />}

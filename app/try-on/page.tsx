@@ -58,89 +58,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function ProfileSummary({
-  history,
-  decide,
-}: {
-  history: HistoryItem[];
-  decide: (id: string, d: Decision) => void;
-}) {
-  const fit = history.filter((h) => h.kind === "fit");
-  const decided = fit.filter((h) => h.decided !== "undecided");
-  const avg = decided.length
-    ? Math.round(decided.reduce((s, h) => s + h.confidence, 0) / decided.length)
-    : 0;
-  const kept = fit.filter((h) => h.decided === "kept").length;
-  const rejected = fit.filter((h) => h.decided === "rejected").length;
-  const sizeCount: Record<string, number> = {};
-  fit.forEach((h) => (sizeCount[h.recommendedSize] = (sizeCount[h.recommendedSize] ?? 0) + 1));
-  const common = Object.entries(sizeCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
-
-  return (
-    <div className="glass rounded-2xl p-5">
-      <h2 className="text-lg font-semibold">Your Fit Profile</h2>
-      <p className="mt-1 text-sm text-white/60">
-        Built from your try-ons. The more you try, the smarter the DNA.
-      </p>
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-xl bg-white/5 p-3">
-          <div className="text-white/50">Avg confidence</div>
-          <div className="text-2xl font-bold text-accent-2">{avg}%</div>
-        </div>
-        <div className="rounded-xl bg-white/5 p-3">
-          <div className="text-white/50">Your common size</div>
-          <div className="text-2xl font-bold">{common}</div>
-        </div>
-        <div className="rounded-xl bg-white/5 p-3">
-          <div className="text-white/50">Kept</div>
-          <div className="text-2xl font-bold text-accent-2">{kept}</div>
-        </div>
-        <div className="rounded-xl bg-white/5 p-3">
-          <div className="text-white/50">Rejected</div>
-          <div className="text-2xl font-bold text-red-400">{rejected}</div>
-        </div>
-      </div>
-      {fit.length > 0 && (
-        <ul className="mt-4 space-y-2 text-sm">
-          {fit.map((h) => (
-            <li
-              key={h.id}
-              className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2"
-            >
-              <span className="truncate">
-                {h.garmentLabel}{" "}
-                <span className="text-white/40">· {h.recommendedSize}</span>
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="font-mono text-accent-2">{h.confidence}%</span>
-                <button
-                  onClick={() => decide(h.id, "kept")}
-                  className={`rounded px-2 py-0.5 text-xs ${
-                    h.decided === "kept" ? "bg-accent-2 text-black" : "bg-white/10"
-                  }`}
-                >
-                  Keep
-                </button>
-                <button
-                  onClick={() => decide(h.id, "rejected")}
-                  className={`rounded px-2 py-0.5 text-xs ${
-                    h.decided === "rejected" ? "bg-red-500 text-white" : "bg-white/10"
-                  }`}
-                >
-                  Reject
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {fit.length === 0 && (
-        <p className="mt-4 text-sm text-white/40">No try-ons yet.</p>
-      )}
-    </div>
-  );
-}
-
 export default function TryOnPage() {
   const [category, setCategory] = useState<Category>("cloth");
   const [brand, setBrand] = useState<string>("default");
@@ -194,13 +111,6 @@ export default function TryOnPage() {
     } catch {}
   }, []);
 
-  const decide = useCallback(
-    (id: string, decision: Decision) => {
-      persist(history.map((h) => (h.id === id ? { ...h, decided: decision } : h)));
-    },
-    [history, persist],
-  );
-
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -242,18 +152,39 @@ export default function TryOnPage() {
     return res.json();
   }
 
+  // Whether all required inputs for the current category are present.
+  const requiredFilled = (() => {
+    if (!selfie || !garment || !brand) return false;
+    if (!body.bust || !body.waist || !body.hips || !body.shoulder || !body.height) return false;
+    if (category === "shoes" && (!body.footLength || !gender)) return false;
+    return true;
+  })();
+
   async function run() {
     setError("");
-    if (!selfie || !garment) {
-      setError("Upload a selfie and a garment image.");
+    const missing: string[] = [];
+    if (!selfie) missing.push("selfie");
+    if (!garment) missing.push("garment");
+    if (!body.bust) missing.push("bust");
+    if (!body.waist) missing.push("waist");
+    if (!body.hips) missing.push("hips");
+    if (!body.shoulder) missing.push("shoulder");
+    if (!body.height) missing.push("height (cm)");
+    if (category === "shoes") {
+      if (!body.footLength) missing.push("foot length");
+      if (!gender) missing.push("gender");
+    }
+    if (!brand) missing.push("brand");
+    if (missing.length) {
+      setError(`Please fill in: ${missing.join(", ")}.`);
       return;
     }
     setPhase("rendering");
     setStatusText("Uploading images & starting try-on…");
     try {
       const [selfieDataUrl, garmentDataUrl] = await Promise.all([
-        readFileAsDataUrl(selfie),
-        readFileAsDataUrl(garment),
+        readFileAsDataUrl(selfie!),
+        readFileAsDataUrl(garment!),
       ]);
 
       const startRes = await fetch("/api/tryon", {
@@ -267,7 +198,14 @@ export default function TryOnPage() {
           gender,
         }),
       });
-      if (!startRes.ok) throw new Error((await startRes.json()).error ?? "Try-on failed");
+      if (!startRes.ok) {
+        let msg = "Try-on failed";
+        try {
+          const j = await startRes.json();
+          if (j?.error) msg = j.error;
+        } catch {}
+        throw new Error(msg);
+      }
       const { taskId } = await startRes.json();
 
       // Save a history entry immediately (with thumbnails) so it persists even
@@ -279,7 +217,7 @@ export default function TryOnPage() {
           kind: "fit",
           category,
           brand,
-          garmentLabel: garment.name,
+          garmentLabel: garment!.name,
           selfieThumb: selfiePreview,
           garmentThumb: garmentPreview,
           recommendedSize: "—",
@@ -296,7 +234,7 @@ export default function TryOnPage() {
         if (status.error) {
           clearInterval(pollRef.current!);
           setPhase("error");
-          setError(status.error);
+          setError("Something went wrong. Please try again.");
           return;
         }
         if (status.taskStatus === "processing" || status.taskStatus === "pending" || status.taskStatus === "running") {
@@ -306,13 +244,14 @@ export default function TryOnPage() {
         if (status.taskStatus === "error") {
           clearInterval(pollRef.current!);
           setPhase("error");
-          setError(status.error ?? "Try-on errored");
+          setError("Something went wrong. Please try again.");
           return;
         }
         clearInterval(pollRef.current!);
-        // Prefer YouCam's own (always-public) result URL; use ImgBB hosted URL
-        // only as a fallback. This keeps the image working even if ImgBB is off.
-        setRenderUrl(status.resultUrl ?? status.hostedUrl ?? "");
+        // The generated image is re-hosted to ImgBB behind the scenes in the
+        // status route; prefer that stable ImgBB URL, fall back to YouCam's
+        // own result URL only if ImgBB didn't return one.
+        setRenderUrl(status.hostedUrl ?? status.resultUrl ?? "");
         setStatusText("Scoring the fit…");
         const v = await computeVerdict();
         setVerdict(v);
@@ -324,15 +263,15 @@ export default function TryOnPage() {
                   ...h,
                   recommendedSize: v.recommendedSize,
                   confidence: v.confidence,
-                  resultUrl: status.hostedUrl ?? status.resultUrl,
+                  resultUrl: status.hostedUrl ?? status.resultUrl ?? h.resultUrl,
                 }
               : h,
           ),
         );
       }, 3000);
-    } catch (e) {
+    } catch {
       setPhase("error");
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      setError("Something went wrong. Please try again.");
     }
   }
 
@@ -372,7 +311,7 @@ export default function TryOnPage() {
               <label className="group flex flex-col items-center rounded-xl border border-dashed border-white/20 p-4 text-center transition hover:border-accent/50">
                 <input type="file" accept="image/*" onChange={onSelfie} className="hidden" />
                 {selfiePreview ? (
-                  <SmartImg src={selfiePreview} alt="selfie" className="mt-1 h-28 w-28 rounded-lg" />
+                  <SmartImg src={selfiePreview} alt="selfie" fit="cover" className="mt-1 h-28 w-28 rounded-lg object-cover" />
                 ) : (
                   <>
                     <IconUpload className="h-7 w-7 text-white/40 transition group-hover:text-accent" />
@@ -383,7 +322,7 @@ export default function TryOnPage() {
               <label className="group flex flex-col items-center rounded-xl border border-dashed border-white/20 p-4 text-center transition hover:border-accent/50">
                 <input type="file" accept="image/*" onChange={onGarment} className="hidden" />
                 {garmentPreview ? (
-                  <SmartImg src={garmentPreview} alt="garment" className="mt-1 h-28 w-28 rounded-lg" />
+                  <SmartImg src={garmentPreview} alt="garment" fit="cover" className="mt-1 h-28 w-28 rounded-lg object-cover" />
                 ) : (
                   <>
                     {category === "cloth" ? (
@@ -466,82 +405,152 @@ export default function TryOnPage() {
 
             <button
               onClick={run}
-              disabled={phase === "rendering"}
+              disabled={phase === "rendering" || !requiredFilled}
               className="mt-5 w-full rounded-xl bg-accent py-3 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {phase === "rendering" ? "Working…" : "Try on & score my fit"}
             </button>
             <ErrorBox raw={error} onRetry={phase === "error" ? run : undefined} />
           </div>
-
-          {(phase === "rendering" || phase === "done") && (
-            <div className="glass rounded-2xl p-5">
-              {phase === "rendering" && <Loader text={statusText} />}
-              {phase === "done" && verdict && (
-                <div className="animate-pop">
-                  <div className="flex flex-wrap items-center gap-5">
-                    {renderUrl && (
-                      <div className="relative">
-                        <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-accent to-accent-2 opacity-30 blur" />
-                        <SmartImg
-                          src={renderUrl}
-                          alt="Your virtual try-on"
-                          className="relative h-64 w-64 rounded-xl"
-                        />
-                      </div>
-                    )}
-                    <div className="flex flex-col items-center">
-                      <ScoreRing value={verdict.confidence} label="Fit" />
-                      <div className="mt-1 text-lg font-semibold">
-                        Size: {verdict.recommendedSize}
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        {selfiePreview && (
-                          <SmartImg
-                            src={selfiePreview}
-                            alt="your selfie"
-                            className="h-16 w-16 rounded"
-                          />
-                        )}
-                        {garmentPreview && (
-                          <SmartImg
-                            src={garmentPreview}
-                            alt="garment"
-                            className="h-16 w-16 rounded"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <ul className="mt-4 space-y-1 text-sm text-white/70">
-                    {verdict.reasons.map((r, i) => (
-                      <li key={i}>• {r}</li>
-                    ))}
-                  </ul>
-                  <div className="mt-4 flex gap-2">
-                    {verdict.perSize.map((s) => (
-                      <div key={s.size} className="flex-1 text-center">
-                        <div className="text-xs text-white/50">{s.size}</div>
-                        <div className="h-1.5 rounded bg-white/10">
-                          <div
-                            className="h-full rounded bg-accent-2"
-                            style={{ width: `${s.score}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </section>
 
         <aside>
-          <ProfileSummary history={history} decide={decide} />
+          <ResultPanel
+            phase={phase}
+            renderUrl={renderUrl}
+            verdict={verdict}
+            selfiePreview={selfiePreview}
+            garmentPreview={garmentPreview}
+          />
         </aside>
       </div>
+
+      {phase === "rendering" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass flex flex-col items-center gap-4 rounded-2xl px-8 py-7">
+            <Loader text={statusText} />
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+function ResultPanel({
+  phase,
+  renderUrl,
+  verdict,
+  selfiePreview,
+  garmentPreview,
+}: {
+  phase: "idle" | "rendering" | "done" | "error";
+  renderUrl: string;
+  verdict: FitVerdict | null;
+  selfiePreview: string;
+  garmentPreview: string;
+}) {
+  if (phase === "idle") {
+    return (
+      <div className="glass flex min-h-[16rem] flex-col items-center justify-center rounded-2xl p-5 text-center">
+        <IconShirt className="h-8 w-8 text-white/30" />
+        <p className="mt-3 text-sm text-white/50">
+          Your generated try-on and fit score will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  if (phase === "rendering") {
+    return (
+      <div className="glass flex min-h-[16rem] flex-col items-center justify-center rounded-2xl p-5 text-center">
+        <p className="text-sm text-white/50">Generating your try-on…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass rounded-2xl p-5">
+      {renderUrl ? (
+        <div className="animate-pop">
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="relative">
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-accent to-accent-2 opacity-30 blur" />
+              <SmartImg
+                src={renderUrl}
+                alt="Your virtual try-on"
+                raw
+                className="relative h-64 w-64 rounded-xl"
+              />
+            </div>
+            <div className="flex flex-col items-center">
+              {verdict && <ScoreRing value={verdict.confidence} label="Fit" />}
+              {verdict && (
+                <div className="mt-1 text-lg font-semibold">
+                  Size: {verdict.recommendedSize}
+                </div>
+              )}
+              <div className="mt-3 flex gap-2">
+                {selfiePreview && (
+                <SmartImg
+                  src={selfiePreview}
+                  alt="your selfie"
+                  fit="cover"
+                  className="h-16 w-16 rounded object-cover"
+                />
+                )}
+                {garmentPreview && (
+                <SmartImg
+                  src={garmentPreview}
+                  alt="garment"
+                  fit="cover"
+                  className="h-16 w-16 rounded object-cover"
+                />
+                )}
+              </div>
+            </div>
+          </div>
+          {verdict && (
+            <ul className="mt-4 space-y-1 text-sm text-white/70">
+              {verdict.reasons.map((r, i) => (
+                <li key={i}>• {r}</li>
+              ))}
+            </ul>
+          )}
+          {verdict && (
+            <div className="mt-4 flex gap-2">
+              {verdict.perSize.map((s) => (
+              <div key={s.size} className="flex-1 text-center">
+                <div className="text-xs text-white/50">{s.size}</div>
+                <div className="h-1.5 rounded bg-white/10">
+                  <div
+                    className="h-full rounded bg-accent-2"
+                    style={{ width: `${s.score}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          )}
+        </div>
+      ) : (
+        <div className="py-6 text-center text-sm text-white/50">
+          The try-on finished but the generated image URL was not returned.
+        </div>
+      )}
+      {renderUrl && (
+        <div className="mt-3 break-all text-xs text-white/40">
+          <span className="text-white/60">Generated image: </span>
+          <a
+            href={renderUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-accent"
+          >
+            {renderUrl}
+          </a>
+        </div>
+      )}
+    </div>
   );
 }
 

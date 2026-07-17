@@ -7,7 +7,6 @@ import { IconSparkle } from "./illustrations";
 const LINKS = [
   { href: "/", label: "Home" },
   { href: "/try-on", label: "Fit & Try-On" },
-  { href: "/skin", label: "Skin Analysis" },
   { href: "/profile", label: "My Fit Profile" },
 ];
 

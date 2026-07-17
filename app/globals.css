@@ -21,14 +21,15 @@
 }
 
 html {
-  scroll-behavior: smooth;
-}
-
-body {
+  min-height: 100%;
   background:
     radial-gradient(1100px 600px at 12% -10%, rgba(224, 145, 180, 0.22), transparent 60%),
     radial-gradient(1000px 500px at 100% 0%, rgba(200, 161, 90, 0.16), transparent 55%),
     var(--background);
+  background-attachment: fixed;
+}
+
+body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   min-height: 100%;

@@ -40,6 +40,16 @@ const FRIENDLY_ERRORS: { test: RegExp; message: string }[] = [
     message:
       "Something was missing from the request. Try again, and if it continues, check the image and inputs.",
   },
+  {
+    test: /fetch failed|network|econnrefused|timeout|timed out|aborted/i,
+    message:
+      "We couldn't reach the try-on service. Please check your connection and try again in a moment.",
+  },
+  {
+    test: /(^|\s)500(\s|$)|internal server error/i,
+    message:
+      "The try-on service hit a problem. Please try again — if it keeps happening, the service may be temporarily unavailable.",
+  },
 ];
 
 // Turn a raw YouCam/API error string into something readable for the UI.
@@ -67,17 +77,13 @@ export function humanizeError(raw: string): string {
   return pretty.charAt(0).toUpperCase() + pretty.slice(1);
 }
 
-export function ErrorBox({ raw, onRetry }: { raw: string; onRetry?: () => void }) {
+export function ErrorBox({ raw, onRetry }: { raw?: string; onRetry?: () => void }) {
   if (!raw) return null;
   return (
     <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 p-4">
-      <div className="text-sm font-medium text-red-300">{humanizeError(raw)}</div>
-      <details className="mt-1">
-        <summary className="cursor-pointer text-xs text-red-300/70">
-          Technical details
-        </summary>
-        <code className="mt-1 block break-words text-xs text-red-200/60">{raw}</code>
-      </details>
+      <div className="text-sm font-medium text-red-300">
+        Something went wrong. Please try again.
+      </div>
       {onRetry && (
         <button
           onClick={onRetry}
@@ -125,10 +131,14 @@ export function SmartImg({
   src,
   alt,
   className,
+  fit = "contain",
+  raw = false,
 }: {
   src?: string;
   alt: string;
   className?: string;
+  fit?: "contain" | "cover";
+  raw?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const [optimizerBroke, setOptimizerBroke] = useState(false);
@@ -143,13 +153,13 @@ export function SmartImg({
     );
   }
 
-  if (src.startsWith("data:") || src.startsWith("blob:") || optimizerBroke) {
+  if (src.startsWith("data:") || src.startsWith("blob:") || optimizerBroke || raw) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={alt}
-        className={className}
+        className={`${className ?? ""} ${fit === "cover" ? "object-cover" : "object-contain"}`}
         onError={() => setFailed(true)}
       />
     );
@@ -161,7 +171,7 @@ export function SmartImg({
         src={src}
         alt={alt}
         fill
-        className="object-contain"
+        className={fit === "cover" ? "object-cover" : "object-contain"}
         onError={() => setOptimizerBroke(true)}
         sizes="(max-width: 768px) 50vw, 256px"
       />
