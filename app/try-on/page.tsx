@@ -160,6 +160,21 @@ export default function TryOnPage() {
     return true;
   })();
 
+  // Map a YouCam/API error code to a friendly, non-technical hint. We never
+  // expose the raw code to the user — just plain guidance on what to try next.
+  function friendlyTryOnError(code?: string): string {
+    const c = (code ?? "").toLowerCase();
+    if (c.includes("min_image_size") || c.includes("too small") || c.includes("src (file|source )?too small"))
+      return "Your photo is too small. Use a larger, clear image where the person fills most of the frame.";
+    if (c.includes("pose") || c.includes("face") || c.includes("person") || c.includes("body"))
+      return "We couldn't detect a person in a usable pose. Upload a clear, front-facing photo of a person.";
+    if (c.includes("download") || c.includes("fetch") || c.includes("url"))
+      return "We couldn't read one of your images. Try a different JPG or PNG and upload again.";
+    if (c.includes("credit"))
+      return "The try-on service is out of credits. Please try again later.";
+    return "Something went wrong. Please try again with a clear photo of a person.";
+  }
+
   async function run() {
     setError("");
     const missing: string[] = [];
@@ -199,12 +214,7 @@ export default function TryOnPage() {
         }),
       });
       if (!startRes.ok) {
-        let msg = "Try-on failed";
-        try {
-          const j = await startRes.json();
-          if (j?.error) msg = j.error;
-        } catch {}
-        throw new Error(msg);
+        throw new Error("start");
       }
       const { taskId } = await startRes.json();
 
@@ -233,8 +243,8 @@ export default function TryOnPage() {
         const status = await s.json();
         if (status.error) {
           clearInterval(pollRef.current!);
+          setError(friendlyTryOnError(status.error));
           setPhase("error");
-          setError("Something went wrong. Please try again.");
           return;
         }
         if (status.taskStatus === "processing" || status.taskStatus === "pending" || status.taskStatus === "running") {
@@ -243,8 +253,8 @@ export default function TryOnPage() {
         }
         if (status.taskStatus === "error") {
           clearInterval(pollRef.current!);
+          setError(friendlyTryOnError(status.error));
           setPhase("error");
-          setError("Something went wrong. Please try again.");
           return;
         }
         clearInterval(pollRef.current!);
@@ -271,7 +281,7 @@ export default function TryOnPage() {
       }, 3000);
     } catch {
       setPhase("error");
-      setError("Something went wrong. Please try again.");
+      setError("Something went wrong. Please try again with a clear photo of a person.");
     }
   }
 
@@ -417,6 +427,7 @@ export default function TryOnPage() {
         <aside>
           <ResultPanel
             phase={phase}
+            errorMsg={error}
             renderUrl={renderUrl}
             verdict={verdict}
             selfiePreview={selfiePreview}
@@ -438,12 +449,14 @@ export default function TryOnPage() {
 
 function ResultPanel({
   phase,
+  errorMsg,
   renderUrl,
   verdict,
   selfiePreview,
   garmentPreview,
 }: {
   phase: "idle" | "rendering" | "done" | "error";
+  errorMsg: string;
   renderUrl: string;
   verdict: FitVerdict | null;
   selfiePreview: string;
@@ -464,6 +477,19 @@ function ResultPanel({
     return (
       <div className="glass flex min-h-[16rem] flex-col items-center justify-center rounded-2xl p-5 text-center">
         <p className="text-sm text-white/50">Generating your try-on…</p>
+      </div>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <div className="glass flex min-h-[16rem] flex-col items-center justify-center rounded-2xl p-5 text-center">
+        <div className="grid h-12 w-12 place-items-center rounded-full bg-red-500/15 text-2xl">
+          !
+        </div>
+        <p className="mt-3 max-w-xs text-sm text-white/70">
+          {errorMsg || "Something went wrong. Please try again."}
+        </p>
       </div>
     );
   }
