@@ -1,96 +1,114 @@
-# PROJECT CONTEXT — FitDNA (YouCam Apparel VTO Hackathon)
+# FitDNA — Decode your fit before you buy
 
-> This file is the persistent memory for this project. Open Code: read this in full
-> before doing anything, and **update the "Log" and "Decisions" sections at the end of
-> every work session** — that's how continuity across sessions works here.
+**FitDNA** pairs the **Perfect Corp YouCam Apparel Virtual Try-On (VTO) API** with a
+**Fit Confidence Score** so online shoppers stop guessing and start buying with
+certainty — and skip the return shipping.
 
-## 1. The competition (facts, not vibes)
+Built for the **YouCam API Skin AI & Apparel VTO Hackathon** (Apparel VTO track).
 
-- **Hackathon:** YouCam API Skin AI & Apparel VTO Hackathon, hosted by Perfect Corp on Devpost.
-  https://youcam-api.devpost.com/
-- **Deadline:** Aug 17, 2026 @ 11:45am EDT
-- **Track we're entering:** Apparel Virtual Try-On (not Skin AI, not combined)
-- **Prizes:** $5,000 (1st) / $1,000 (2nd) / 5,000 API units ≈ $275 (3rd–5th) + blog feature
-- **1,000 free API units** included with registration (~$179 value) — budget usage, don't burn testing credits carelessly.
+---
 
-### What actually gets judged
+## The problem it solves
 
-1. **Technological Implementation** — real, non-trivial integration of the Apparel VTO API, working end to end.
-2. **Design** — a coherent product experience, not a tech demo.
-3. **Potential Impact** — a credible, specific real-world problem, solved for a real audience.
-4. **Quality of the Idea** — non-obvious use of the API; judges explicitly said they don't want "a wrapper around a single API call."
+Most online clothing/shoe decisions come down to a guess: *will this fit, will this
+look right, is it worth the return shipping?* Returns from bad fit guesses are a huge
+cost for retailers and a hassle for shoppers. Visual try-on alone (the "obvious" use
+judges are tired of) shows you the garment but doesn't tell you if the **size** is right.
 
-### Submission requirements (don't miss any of these)
+FitDNA adds the non-obvious layer: it estimates your body proportions, normalizes a
+garment's brand size chart into a common scheme, and outputs a **0–100 Fit Confidence
+Score** with a recommended size and plain-language reasoning. It then remembers your
+try-ons and keep/reject decisions to build an evolving **Fit Profile**.
 
-- Public (or shared-private) code repo with full source + setup instructions
-- Text description of features/functionality + the retail/consumer value case
-- Screenshots
-- 1–3 min demo video (judges won't watch past 3 min), uploaded publicly to YouTube/Vimeo/Youku, must show the app running on its target device, must explain which YouCam API is used, no unlicensed third-party trademarks/music
-- Must explain how the project was newly built or significantly updated _during_ the submission period
-- Winner obligations: exit interview + blog feature consent
+This is clearly *more than a wrapper around a single API call* — there is real scoring
+logic (size normalization across brands, per-keyword tolerance, confidence math) sitting
+on top of the YouCam render.
 
-## 2. The API (Perfect Corp YouCam API — Apparel VTO)
+## How it uses the YouCam API
 
-- Docs: https://docs.perfectcorp.com/develop/introduction
-- Standard REST API, async task pattern:
-  1. **Auth** — your **API Key = `client_id`**, your **Secret Key = `client_secret`**. These are NOT sent directly as a bearer token. Flow: use client_id/client_secret to obtain an `id_token` (per the Quick Start Guide's auth step, involves signing/encrypting the client_id), then exchange that for an `access_token`. All subsequent calls use `Authorization: Bearer <access_token>`. The access_token expires — check the docs for its lifetime and refresh accordingly.
-  2. **Upload** — call the relevant `file/...` endpoint to get an upload URL + `file_id`, then PUT the image to that URL.
-  3. **Start task** — POST to the relevant `task/...` endpoint (e.g. `task/cloth`, `task/shoes`, `task/bag` — confirm exact path per garment category in the API reference, they differ per category) with the `file_id` + garment config. Get back a `task_id`.
-  4. **Poll** — GET the task status endpoint until `status` is `success` or `error`.
-  5. **Result** — success response includes a download URL for the generated try-on image.
+- **Apparel Virtual Try-On (V2.0 S2S)** for both **Clothes** (`task/cloth`) and
+  **Shoes** (`task/shoes`).
+- Flow (all server-side, key never reaches the browser):
+  1. Upload user selfie + garment image via `POST /s2s/v2.0/file/{cloth|shoes}` → get `file_id`.
+  2. Start the try-on task via `POST /s2s/v2.0/task/{cloth|shoes}` → get `task_id`.
+  3. Poll `GET /s2s/v2.0/task/{feature}/{task_id}` until `success` → render image URL.
+- Auth: **V2 uses the API key directly as a Bearer token** —
+  `Authorization: Bearer <PERFECTCORP_API_KEY>`.
+- Base host: `https://yce-api-01.perfectcorp.com`
 
-### Credentials — already generated, handle with care
+The Fit Confidence Score is computed locally from your measurements + sample brand size
+charts (`lib/fitscore.ts`); it is independent of the API and runs even if you have no
+key, so the product demo works without burning credits.
 
-- API Key (client_id) and Secret Key (client_secret) have already been generated in the Perfect Console.
-- **The secret key is shown only once at generation time** — if it's saved somewhere other than a password manager or `.env` right now, move it into one immediately.
-- Store both as `PERFECTCORP_CLIENT_ID` and `PERFECTCORP_CLIENT_SECRET` in a `.env` file, gitignored from the first commit — don't repeat the leaked-HF-token incident from Lumora.
-- Never paste the actual key/secret values into chat with Claude (here or in Open Code) — reference them only as env var names.
-- Base host pattern seen in docs: `https://yce-api-01.makeupar.com/s2s/v2.0/...` — **verify current host/paths against the live API reference before hardcoding**, Perfect Corp has multiple API versions (v1 vs v2.0) and the hackathon should use the current one.
-- **Known gotcha from a prior hackathon build (MIRROR, DeveloperWeek 2026):** Perfect Corp's API needs a **public URL** to reach your backend/image host — plan to run behind ngrok (or deploy properly) from day one, don't leave it for later.
-- Different garment categories (clothes, shoes, bags, earrings) have different request payload shapes (`garment_category`, `change_shoes`, `ref_file_urls`, `object_infos`, etc.) — don't assume one schema fits all if the product supports multiple categories.
-- Rate limits: 100 req / 5 min per IP, 100 req / min per access token — both must hold.
+## Tech stack
 
-## 3. Idea direction (brainstormed, not yet locked)
+- **Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4**
+- Server-side YouCam client in `lib/perfectcorp.ts`
+- Fit scoring logic in `lib/fitscore.ts`
+- Light "Wardrobe / Fit Profile" layer persisted in browser `localStorage` (`lib/profile.ts`)
+- Route handlers under `app/api/*`
 
-The hackathon brief basically hands you the thesis: _"will this fit, will this look right, is it worth the return shipping — build something that replaces that guess with confidence."_ Straight visual try-on alone is the "obvious" use judges said they're tired of. The differentiator is pairing VTO with something that reduces actual purchase risk or decision friction.
+## Setup
 
-Three directions, roughly in order of how well they dodge the "surface wrapper" trap:
+```bash
+# 1. Install
+npm install
 
-**A. Fit Confidence Score (strongest fit with the judging criteria)**
-VTO render + a fit/size recommendation layer on top: estimate body proportions from the try-on photo, compare against per-brand size charts, output a "how this will actually fit you" confidence score alongside the visual. Directly attacks the stated problem (returns from bad fit guesses), and it's clearly more than a single API call — there's real logic (size normalization across brands, confidence scoring) sitting on top of the render.
+# 2. Configure env
+cp .env.example .env
+#   edit .env and paste your YouCam API key as PERFECTCORP_API_KEY
+#   get it at https://yce.perfectcorp.com/api-console/en/api-keys/
 
-**B. Wardrobe/Style Profile over time (plays to your gamification instincts from FluentUp)**
-Users build a virtual closet, try on new pieces against what they already own, and get an evolving "style profile" — similar shape to your Mistake DNA idea but for fashion: track what they try, what they keep, what they reject, and use that to get smarter about recommendations. More product depth, more demo-able "delight," but more scope for a one-day-ish build.
+# 3. Run dev
+npm run dev
+#   open http://localhost:3000
+```
 
-**C. In-context shopping layer**
-Overlay VTO directly into a real or simulated e-commerce product page flow (browser extension or embedded widget) rather than a standalone app — makes the "retail value" case almost self-evident since it lives where the buying decision actually happens. Good demo footage, but more surface area (needs a believable storefront) for the time you have.
+> Without a key the UI still works for the **Fit Confidence Score** demo (enter
+> measurements, pick a brand, see the score). The live try-on render requires a valid
+> `PERFECTCORP_API_KEY`.
 
-**Recommendation if you want a single strong pick:** A, possibly with a light B-style layer (remember past try-ons/sizes per user) if time allows. It's the most defensible under "Potential Impact" and "Quality of the Idea" because the value isn't just seeing the garment — it's the confidence number solving the return-shipping problem the hackathon names outright.
+### Environment variables
 
-_Open Code: don't lock this in silently — confirm the direction with Nur before scaffolding, and update this section once decided._
+| Var | Purpose |
+| --- | --- |
+| `PERFECTCORP_API_KEY` | Your YouCam V2 API key (Bearer token). **Never commit the real value.** |
+| `PERFECTCORP_API_BASE` | API base URL (defaults to `https://yce-api-01.perfectcorp.com`). |
 
-## 4. Tech stack (defaults — confirm/adjust)
+## Usage
 
-- Frontend: Next.js 14 + Tailwind (matches FluentUp stack, known-fast to scaffold)
-- Backend: Next.js API routes or a small Node/FastAPI service — needed regardless, since the Perfect Corp API requires a public backend URL for callbacks/polling
-- Image hosting: needs a public, reachable URL for garment/user images — decide early (S3/Cloudinary/ngrok-for-dev) per the MIRROR gotcha above
-- Deployment: Vercel for frontend (known-good from prior projects); backend wherever it can hold a stable public URL
+1. Choose **Clothes** or **Shoes**.
+2. Upload a **selfie** and a **garment product image**.
+3. Enter your body measurements (cm). For shoes, enter **foot length (cm)**.
+4. Pick a brand size chart (Generic / Zara sample charts included).
+5. Click **Try on & score my fit** → see the YouCam render + your Fit Confidence Score,
+   recommended size, and reasoning.
+6. Keep or reject the result; your **Fit Profile** updates on the right.
 
-## 5. Repo hygiene for judging
+## Demo video notes (for submission)
 
-- README must be self-sufficient: setup, env vars needed (`PERFECTCORP_API_KEY` etc.), how to run
-- Keep the API key out of the repo (`.env`, gitignored) — a leaked key has bitten this dev before (see Lumora HF token incident), don't repeat it here
-- Repo must show it was built or substantially updated _within_ the submission window — keep commit history honest and dated
+- Show the app running in the browser at `localhost:3000` (or the deployed Vercel URL).
+- Explain the YouCam **Apparel Virtual Try-On API** is used for the render.
+- Highlight the Fit Confidence Score as the differentiating logic.
 
-## 6. Open decisions (fill in as resolved)
+## Project structure
 
-- [ ] Final idea locked (A/B/C above or a hybrid)?
-- [ ] Garment category scope (clothes only? clothes+shoes?)
-- [ ] Solo or team submission?
-- [ ] Confirmed current API base URL + exact endpoint paths from the live reference (don't trust hardcoded paths above without checking)
+```
+app/
+  page.tsx                 # main UI (upload, try-on, score, profile)
+  api/tryon/route.ts       # upload images + start VTO task
+  api/tryon/status/route.ts# poll task status
+  api/fitscore/route.ts    # compute Fit Confidence Score
+lib/
+  perfectcorp.ts           # server-side YouCam V2 client
+  fitscore.ts              # fit scoring + sample brand charts
+  profile.ts               # light-B profile (localStorage)
+```
 
-## 7. Log
+## Notes / limitations
 
-_(Open Code: append a dated one-line entry here each session — what was built, what broke, what's next.)_
-
-- 2026-07-17 — Context doc created. Project named FitDNA. Track: Apparel VTO. API key + secret key generated (stored via env vars, not in repo). Idea direction not yet locked (leaning A: Fit Confidence Score).
+- Brand size charts are **sample data** in `lib/fitscore.ts`; a production build would
+  fetch real per-brand charts.
+- Body proportions are entered by the user (a production build could estimate them from
+  the selfie via a pose/measurement model — out of scope for the hackathon).
+- Submission type: **solo**.

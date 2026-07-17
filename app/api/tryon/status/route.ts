@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTryOnStatus, type GarmentCategory } from "@/lib/perfectcorp";
+import { uploadToImgBb } from "@/lib/imgbb";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -20,6 +21,23 @@ export async function GET(req: NextRequest) {
       category,
       statusUrl: "",
     });
+
+    // On success, optionally re-host the result to ImgBB so the rendered image
+    // has a stable public URL (handy for sharing / screenshots). If ImgBB isn't
+    // configured or the fetch fails, we fall back to YouCam's own result URL.
+    if (status.taskStatus === "success" && status.resultUrl) {
+      try {
+        const imgRes = await fetch(status.resultUrl);
+        if (imgRes.ok) {
+          const buf = Buffer.from(await imgRes.arrayBuffer());
+          const hosted = await uploadToImgBb(buf, `${category}-${taskId}.png`);
+          return NextResponse.json({ ...status, hostedUrl: hosted.url });
+        }
+      } catch {
+        // ignore — fall through to returning YouCam's resultUrl
+      }
+    }
+
     return NextResponse.json(status);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

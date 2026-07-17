@@ -64,17 +64,16 @@ function scoreSizeRow(
   profile: BodyProfile,
 ): { score: number; reasons: string[] } {
   const reasons: string[] = [];
-  let totalGap = 0;
   let weighted = 0;
   let weightSum = 0;
 
-  const keys: MeasurementKey[] = ["bust", "waist", "hips", "shoulder"];
+  const keys: (keyof SizeRow)[] = ["bust", "waist", "hips", "shoulder"];
   for (const key of keys) {
-    const userVal = profile[key];
+    const userVal = profile[key as MeasurementKey];
     const sizeVal = row[key];
     if (userVal == null || sizeVal == null) continue;
-    const tol = KEYWORD_TOLERANCE[key];
-    const gap = userVal - sizeVal; // + means user is larger than size spec
+    const tol = KEYWORD_TOLERANCE[key as MeasurementKey];
+    const gap = (userVal as number) - (sizeVal as number); // + means user is larger than size spec
     const absGap = Math.abs(gap);
     // score contribution: 100 when exact, falls off with gap beyond tolerance
     const contribution = clamp(100 - Math.max(0, absGap - tol) * 18, 0, 100);
@@ -82,12 +81,11 @@ function scoreSizeRow(
     const w = key === "hips" || key === "shoulder" ? 1.3 : 1;
     weighted += contribution * w;
     weightSum += w;
-    totalGap += absGap;
 
     if (absGap > tol) {
       const dir = gap > 0 ? "run tight" : "run loose";
       reasons.push(
-        `${labelFor(key)} ${dir} by ~${absGap.toFixed(0)}cm at size ${row.size}`,
+        `${labelFor(key as MeasurementKey)} ${dir} by ~${absGap.toFixed(0)}cm at size ${row.size}`,
       );
     }
   }

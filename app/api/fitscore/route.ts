@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as FitScoreBody;
     if (body.category === "shoes") {
       const chart: BrandSizeChart = SAMPLE_SHOE_CHART;
-      const footLength = body.footLength ?? body.body.footLength ?? 0;
+      const footLength = body.footLength ?? 0;
       if (!footLength) {
         return NextResponse.json(
           { error: "footLength is required for shoe fit scoring" },
@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(scoreShoeFit(chart, footLength));
     }
 
-    const brandKey = (body.brand && SAMPLE_CLOTH_CHARTS[body.brand]) || "default";
+    const brandKey =
+      body.brand && body.brand in SAMPLE_CLOTH_CHARTS ? body.brand : "default";
     const chart = SAMPLE_CLOTH_CHARTS[brandKey];
     return NextResponse.json(scoreClothingFit(chart, body.body));
   } catch (err) {

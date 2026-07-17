@@ -39,11 +39,20 @@ export async function uploadImage(
   category: GarmentCategory,
   image: Buffer,
   contentType: string,
+  fileName = "image.jpg",
 ): Promise<string> {
   const fileRes = await fetch(`${API_BASE}/s2s/v2.0/file/${category}`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({}),
+    body: JSON.stringify({
+      files: [
+        {
+          content_type: contentType,
+          file_name: fileName,
+          file_size: image.byteLength,
+        },
+      ],
+    }),
   });
 
   if (!fileRes.ok) {
@@ -54,18 +63,22 @@ export async function uploadImage(
   }
 
   const fileJson = (await fileRes.json()) as {
-    result?: { file_id?: string; requests?: { url?: string; method?: string }[] };
+    files?: {
+      file_id?: string;
+      requests?: { url?: string; method?: string; headers?: Record<string, string> }[];
+    }[];
   };
-  const fileId = fileJson.result?.file_id;
-  const uploadUrl = fileJson.result?.requests?.[0]?.url;
+  const first = fileJson.files?.[0];
+  const fileId = first?.file_id;
+  const uploadUrl = first?.requests?.[0]?.url;
   if (!fileId || !uploadUrl) {
     throw new Error("YouCam file API did not return file_id/upload URL.");
   }
 
   const putRes = await fetch(uploadUrl, {
     method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: image,
+    headers: { "Content-Type": contentType, "Content-Length": String(image.byteLength) },
+    body: new Uint8Array(image),
   });
 
   if (!putRes.ok) {
