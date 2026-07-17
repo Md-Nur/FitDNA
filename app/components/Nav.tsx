@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { IconSparkle } from "./illustrations";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -16,8 +17,10 @@ export default function Nav() {
     <nav className="sticky top-0 z-20 border-b border-white/10 bg-background/80 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span className="h-2.5 w-2.5 rounded-full bg-accent" />
-          FitDNA
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-2 text-white">
+            <IconSparkle className="h-4 w-4" />
+          </span>
+          Fit<span className="gradient-text">DNA</span>
         </Link>
         <ul className="flex items-center gap-1 text-sm">
           {LINKS.map((l) => {

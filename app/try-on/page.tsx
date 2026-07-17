@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ErrorBox, Loader, SmartImg } from "../components/Feedback";
+import { IconShirt, IconShoe, IconUpload, ScoreRing } from "../components/illustrations";
 
 type Category = "cloth" | "shoes";
 type Decision = "kept" | "rejected" | "undecided";
@@ -27,6 +29,8 @@ interface HistoryItem {
   category: Category | "skin";
   brand: string;
   garmentLabel: string;
+  selfieThumb?: string;
+  garmentThumb?: string;
   recommendedSize: string;
   confidence: number;
   resultUrl?: string;
@@ -73,7 +77,7 @@ function ProfileSummary({
   const common = Object.entries(sizeCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+    <div className="glass rounded-2xl p-5">
       <h2 className="text-lg font-semibold">Your Fit Profile</h2>
       <p className="mt-1 text-sm text-white/60">
         Built from your try-ons. The more you try, the smarter the DNA.
@@ -153,7 +157,15 @@ export default function TryOnPage() {
     footLength: "",
   });
   const [gender, setGender] = useState<"male" | "female">("female");
-  const [style, setStyle] = useState<string>("casual");
+  const [style, setStyle] = useState<string>("random");
+  const SHOE_STYLES = [
+    "random",
+    "style_minimalist",
+    "style_bohemian",
+    "style_cottagecore",
+    "style_french_elegance",
+    "style_retro_fashion",
+  ];
   const [unit, setUnit] = useState<Unit>("cm");
 
   const [phase, setPhase] = useState<"idle" | "rendering" | "done" | "error">("idle");
@@ -258,6 +270,26 @@ export default function TryOnPage() {
       if (!startRes.ok) throw new Error((await startRes.json()).error ?? "Try-on failed");
       const { taskId } = await startRes.json();
 
+      // Save a history entry immediately (with thumbnails) so it persists even
+      // if the try-on later fails. We update confidence/result on success.
+      const entryId = crypto.randomUUID();
+      persist([
+        {
+          id: entryId,
+          kind: "fit",
+          category,
+          brand,
+          garmentLabel: garment.name,
+          selfieThumb: selfiePreview,
+          garmentThumb: garmentPreview,
+          recommendedSize: "—",
+          confidence: 0,
+          decided: "undecided",
+          createdAt: Date.now(),
+        },
+        ...history,
+      ]);
+
       pollRef.current = setInterval(async () => {
         const s = await fetch(`/api/tryon/status?taskId=${taskId}&category=${category}`);
         const status = await s.json();
@@ -267,7 +299,7 @@ export default function TryOnPage() {
           setError(status.error);
           return;
         }
-        if (status.taskStatus === "processing" || status.taskStatus === "pending") {
+        if (status.taskStatus === "processing" || status.taskStatus === "pending" || status.taskStatus === "running") {
           setStatusText("Generating your try-on…");
           return;
         }
@@ -278,26 +310,25 @@ export default function TryOnPage() {
           return;
         }
         clearInterval(pollRef.current!);
-        setRenderUrl(status.hostedUrl ?? status.resultUrl ?? "");
+        // Prefer YouCam's own (always-public) result URL; use ImgBB hosted URL
+        // only as a fallback. This keeps the image working even if ImgBB is off.
+        setRenderUrl(status.resultUrl ?? status.hostedUrl ?? "");
         setStatusText("Scoring the fit…");
         const v = await computeVerdict();
         setVerdict(v);
         setPhase("done");
-        persist([
-          {
-            id: crypto.randomUUID(),
-            kind: "fit",
-            category,
-            brand,
-            garmentLabel: garment.name,
-            recommendedSize: v.recommendedSize,
-            confidence: v.confidence,
-            resultUrl: status.hostedUrl ?? status.resultUrl,
-            decided: "undecided",
-            createdAt: Date.now(),
-          },
-          ...history,
-        ]);
+        persist(
+          history.map((h) =>
+            h.id === entryId
+              ? {
+                  ...h,
+                  recommendedSize: v.recommendedSize,
+                  confidence: v.confidence,
+                  resultUrl: status.hostedUrl ?? status.resultUrl,
+                }
+              : h,
+          ),
+        );
       }, 3000);
     } catch (e) {
       setPhase("error");
@@ -309,50 +340,59 @@ export default function TryOnPage() {
     <main className="mx-auto max-w-5xl px-5 py-10">
       <header className="mb-8">
         <div className="flex items-center gap-2 text-sm text-accent">
-          <span className="h-2 w-2 rounded-full bg-accent" /> Apparel Virtual Try-On
+          <IconShirt className="h-4 w-4" /> Apparel Virtual Try-On
         </div>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-          Try it on. Score the fit.
+          Try it on. <span className="gradient-text">Score the fit.</span>
         </h1>
         <p className="mt-2 max-w-2xl text-white/60">
-          Powered by the <strong>YouCam Apparel Virtual Try-On API</strong>. We render
-          the look, then score how well it fits <em>your</em> body — so you skip the
-          return shipping.
+          YouCam renders the look, FitDNA scores how well it fits <em>you</em>.
         </p>
       </header>
 
       <div className="grid gap-6 md:grid-cols-[1.4fr_1fr]">
         <section className="space-y-6">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="glass rounded-2xl p-5">
             <div className="flex gap-2">
               {(["cloth", "shoes"] as Category[]).map((c) => (
                 <button
                   key={c}
                   onClick={() => setCategory(c)}
-                  className={`rounded-full px-4 py-1.5 text-sm capitalize ${
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm capitalize ${
                     category === c ? "bg-accent text-white" : "bg-white/10"
                   }`}
                 >
+                  {c === "cloth" ? <IconShirt className="h-4 w-4" /> : <IconShoe className="h-4 w-4" />}
                   {c === "cloth" ? "Clothes" : "Shoes"}
                 </button>
               ))}
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-4">
-              <label className="rounded-xl border border-dashed border-white/20 p-4 text-center">
+              <label className="group flex flex-col items-center rounded-xl border border-dashed border-white/20 p-4 text-center transition hover:border-accent/50">
                 <input type="file" accept="image/*" onChange={onSelfie} className="hidden" />
-                <span className="text-sm text-white/70">Your photo (selfie)</span>
-                {selfiePreview && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={selfiePreview} alt="selfie" className="mt-2 max-h-32 mx-auto rounded" />
+                {selfiePreview ? (
+                  <SmartImg src={selfiePreview} alt="selfie" className="mt-1 h-28 w-28 rounded-lg" />
+                ) : (
+                  <>
+                    <IconUpload className="h-7 w-7 text-white/40 transition group-hover:text-accent" />
+                    <span className="mt-1 text-sm text-white/70">Your selfie</span>
+                  </>
                 )}
               </label>
-              <label className="rounded-xl border border-dashed border-white/20 p-4 text-center">
+              <label className="group flex flex-col items-center rounded-xl border border-dashed border-white/20 p-4 text-center transition hover:border-accent/50">
                 <input type="file" accept="image/*" onChange={onGarment} className="hidden" />
-                <span className="text-sm text-white/70">Garment product image</span>
-                {garmentPreview && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={garmentPreview} alt="garment" className="mt-2 max-h-32 mx-auto rounded" />
+                {garmentPreview ? (
+                  <SmartImg src={garmentPreview} alt="garment" className="mt-1 h-28 w-28 rounded-lg" />
+                ) : (
+                  <>
+                    {category === "cloth" ? (
+                      <IconShirt className="h-7 w-7 text-white/40 transition group-hover:text-accent" />
+                    ) : (
+                      <IconShoe className="h-7 w-7 text-white/40 transition group-hover:text-accent" />
+                    )}
+                    <span className="mt-1 text-sm text-white/70">Garment image</span>
+                  </>
                 )}
               </label>
             </div>
@@ -415,8 +455,8 @@ export default function TryOnPage() {
                   onChange={(e) => setStyle(e.target.value)}
                   className="rounded-lg bg-white/10 px-3 py-2 text-sm"
                 >
-                  {["casual", "sneaker", "heel", "boot", "formal"].map((s) => (
-                    <option key={s} className="text-black">
+                  {SHOE_STYLES.map((s) => (
+                    <option key={s} value={s} className="text-black">
                       {s}
                     </option>
                   ))}
@@ -431,26 +471,45 @@ export default function TryOnPage() {
             >
               {phase === "rendering" ? "Working…" : "Try on & score my fit"}
             </button>
-            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+            <ErrorBox raw={error} onRetry={phase === "error" ? run : undefined} />
           </div>
 
           {(phase === "rendering" || phase === "done") && (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              {phase === "rendering" && <p className="text-white/70">{statusText}</p>}
+            <div className="glass rounded-2xl p-5">
+              {phase === "rendering" && <Loader text={statusText} />}
               {phase === "done" && verdict && (
-                <div>
-                  <div className="flex items-center gap-5">
+                <div className="animate-pop">
+                  <div className="flex flex-wrap items-center gap-5">
                     {renderUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={renderUrl} alt="try-on" className="max-h-64 rounded-xl" />
-                    )}
-                    <div>
-                      <div className="text-sm text-white/50">Fit Confidence</div>
-                      <div className="text-5xl font-black text-accent-2">
-                        {verdict.confidence}%
+                      <div className="relative">
+                        <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-accent to-accent-2 opacity-30 blur" />
+                        <SmartImg
+                          src={renderUrl}
+                          alt="Your virtual try-on"
+                          className="relative h-64 w-64 rounded-xl"
+                        />
                       </div>
+                    )}
+                    <div className="flex flex-col items-center">
+                      <ScoreRing value={verdict.confidence} label="Fit" />
                       <div className="mt-1 text-lg font-semibold">
-                        Recommended: {verdict.recommendedSize}
+                        Size: {verdict.recommendedSize}
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        {selfiePreview && (
+                          <SmartImg
+                            src={selfiePreview}
+                            alt="your selfie"
+                            className="h-16 w-16 rounded"
+                          />
+                        )}
+                        {garmentPreview && (
+                          <SmartImg
+                            src={garmentPreview}
+                            alt="garment"
+                            className="h-16 w-16 rounded"
+                          />
+                        )}
                       </div>
                     </div>
                   </div>

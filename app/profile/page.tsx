@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { SmartImg } from "../components/Feedback";
+import { IconProfile, ArtEmpty } from "../components/illustrations";
 
 type Decision = "kept" | "rejected" | "undecided";
 
@@ -11,6 +13,8 @@ interface HistoryItem {
   category: "cloth" | "shoes" | "skin";
   brand: string;
   garmentLabel: string;
+  selfieThumb?: string;
+  garmentThumb?: string;
   recommendedSize: string;
   confidence: number;
   resultUrl?: string;
@@ -20,16 +24,20 @@ interface HistoryItem {
 
 export default function ProfilePage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem("fitdna.profile.v1");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHistory(raw ? JSON.parse(raw).history ?? [] : []);
-    } catch {}
+    } catch {
+      setHistory([]);
+    }
+    setMounted(true);
   }, []);
 
   const fit = history.filter((h) => h.kind === "fit");
-  const skin = history.filter((h) => h.kind === "skin");
   const decided = fit.filter((h) => h.decided !== "undecided");
   const avg = decided.length
     ? Math.round(decided.reduce((s, h) => s + h.confidence, 0) / decided.length)
@@ -50,31 +58,40 @@ export default function ProfilePage() {
     <main className="mx-auto max-w-4xl px-5 py-10">
       <header className="mb-8">
         <div className="flex items-center gap-2 text-sm text-accent">
-          <span className="h-2 w-2 rounded-full bg-accent" /> Your FitDNA
+          <IconProfile className="h-4 w-4" /> Your FitDNA
         </div>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-          Your Fit Profile
+          Your <span className="gradient-text">Fit</span> Profile
         </h1>
         <p className="mt-2 text-white/60">
-          Everything FitDNA has learned about your fit and skin. Keep or reject results
-          to make it smarter.
+          What FitDNA has learned. Keep or reject to train it.
         </p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Try-ons" value={fit.length} />
-        <Stat label="Avg confidence" value={avg ? `${avg}%` : "—"} />
-        <Stat label="Kept" value={kept} />
-        <Stat label="Rejected" value={rejected} />
-      </div>
+      {!mounted ? (
+        <p className="text-sm text-white/40">Loading your profile…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Try-ons" value={fit.length} />
+            <Stat label="Avg confidence" value={avg ? `${avg}%` : "—"} />
+            <Stat label="Kept" value={kept} />
+            <Stat label="Rejected" value={rejected} />
+          </div>
 
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold">Fit & Try-On history</h2>
-        {fit.length === 0 ? (
-          <p className="mt-2 text-sm text-white/40">
-            No try-ons yet. <Link href="/try-on" className="text-accent-2 hover:underline">Start one →</Link>
-          </p>
-        ) : (
+          <section className="mt-8">
+            <h2 className="text-lg font-semibold">Fit &amp; Try-On history</h2>
+            {fit.length === 0 ? (
+              <div className="glass mt-3 flex flex-col items-center rounded-2xl p-8 text-center">
+                <ArtEmpty className="h-24 w-28" />
+                <p className="mt-2 text-sm text-white/40">
+                  No try-ons yet.{" "}
+                  <Link href="/try-on" className="text-accent-2 hover:underline">
+                    Start one →
+                  </Link>
+                </p>
+              </div>
+            ) : (
           <ul className="mt-3 space-y-2">
             {fit.map((h) => (
               <li
@@ -83,15 +100,37 @@ export default function ProfilePage() {
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm">
-                    {h.garmentLabel}{" "}
-                    <span className="text-white/40">
-                      · {h.category} · {h.recommendedSize}
-                    </span>
+                    <span className="font-medium capitalize">{h.category}</span>{" "}
+                    <span className="text-white/40">· {h.recommendedSize}</span>
                   </div>
-                  {h.resultUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={h.resultUrl} alt="" className="mt-2 max-h-24 rounded" />
-                  )}
+                  <div className="mt-1 flex gap-3">
+                    <SmartImg
+                      src={h.selfieThumb}
+                      alt="selfie"
+                      className="h-16 w-16 rounded"
+                    />
+                    <SmartImg
+                      src={h.garmentThumb}
+                      alt="garment"
+                      className="h-16 w-16 rounded"
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-xs text-white/60">
+                        {h.garmentLabel}
+                      </div>
+                      {h.resultUrl ? (
+                        <SmartImg
+                          src={h.resultUrl}
+                          alt="try-on result"
+                          className="mt-1 h-24 w-24 rounded"
+                        />
+                      ) : (
+                        <p className="mt-1 text-xs text-white/40">
+                          No result — try-on didn&apos;t complete.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="font-mono text-accent-2">{h.confidence}%</span>
@@ -116,7 +155,9 @@ export default function ProfilePage() {
             ))}
           </ul>
         )}
-      </section>
+          </section>
+        </>
+      )}
     </main>
   );
 }

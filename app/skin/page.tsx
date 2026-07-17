@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ErrorBox, Loader, SmartImg } from "../components/Feedback";
+import { IconSkin, IconCamera, ScoreRing } from "../components/illustrations";
 
 interface SkinConcern {
   key: string;
@@ -74,7 +76,7 @@ export default function SkinPage() {
           setError(status.error);
           return;
         }
-        if (status.taskStatus === "processing" || status.taskStatus === "pending") {
+        if (status.taskStatus === "processing" || status.taskStatus === "pending" || status.taskStatus === "running") {
           setStatusText("Analyzing your skin…");
           return;
         }
@@ -96,34 +98,32 @@ export default function SkinPage() {
 
   const levelColor: Record<SkinConcern["level"], string> = {
     good: "bg-accent-2",
-    fair: "bg-yellow-400",
-    "needs care": "bg-red-500",
+    fair: "bg-accent-soft",
+    "needs care": "bg-rose-400",
   };
 
   return (
     <main className="mx-auto max-w-4xl px-5 py-10">
       <header className="mb-8">
         <div className="flex items-center gap-2 text-sm text-accent">
-          <span className="h-2 w-2 rounded-full bg-accent" /> Skin AI
+          <IconSkin className="h-4 w-4" /> Skin AI
         </div>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-          Know your skin before you buy.
+          Know your <span className="gradient-text">skin</span> before you buy.
         </h1>
         <p className="mt-2 max-w-2xl text-white/60">
-          Powered by the <strong>YouCam Skin AI API</strong>. Upload a selfie and get a
-          Skin Confidence summary across wrinkles, pores, oiliness, radiance, dark
-          circles, moisture and your skin type — with product-direction advice.
+          YouCam scores your skin; FitDNA turns it into a confidence summary.
         </p>
       </header>
 
       <div className="grid gap-6 md:grid-cols-[1fr_1.2fr]">
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <label className="block rounded-xl border border-dashed border-white/20 p-6 text-center">
+        <section className="glass rounded-2xl p-5">
+          <label className="flex flex-col items-center rounded-xl border border-dashed border-white/20 p-6 text-center transition hover:border-accent/50">
             <input type="file" accept="image/*" onChange={onSelfie} className="hidden" />
-            <span className="text-sm text-white/70">Upload a selfie</span>
+            <IconCamera className="h-8 w-8 text-white/40" />
+            <span className="mt-1 text-sm text-white/70">Upload a selfie</span>
             {preview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="selfie" className="mx-auto mt-3 max-h-48 rounded" />
+              <SmartImg src={preview} alt="selfie" className="mt-3 h-48 w-48 rounded" />
             )}
           </label>
           <button
@@ -133,22 +133,19 @@ export default function SkinPage() {
           >
             {phase === "analyzing" ? "Analyzing…" : "Analyze my skin"}
           </button>
-          {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+          <ErrorBox raw={error} onRetry={phase === "error" ? analyze : undefined} />
           {phase === "analyzing" && (
-            <p className="mt-3 text-sm text-white/70">{statusText}</p>
+            <div className="mt-3">
+              <Loader text={statusText} />
+            </div>
           )}
         </section>
 
         <section>
           {phase === "done" && insight && (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="glass animate-pop rounded-2xl p-5">
               <div className="flex items-center gap-5">
-                <div>
-                  <div className="text-sm text-white/50">Skin Confidence</div>
-                  <div className="text-5xl font-black text-accent-2">
-                    {insight.overall}%
-                  </div>
-                </div>
+                <ScoreRing value={insight.overall} label="Skin" />
                 {insight.skinType && (
                   <div className="rounded-xl bg-white/10 px-4 py-2 text-sm">
                     <div className="text-white/50">Skin type</div>
@@ -180,7 +177,7 @@ export default function SkinPage() {
             </div>
           )}
           {phase === "idle" && (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/60">
+            <div className="glass rounded-2xl p-5 text-sm text-white/60">
               Upload a selfie to see your Skin Confidence summary. The raw YouCam scores
               are translated into plain-language advice so you can shop skincare that
               fits your face.

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (!body.selfieDataUrl) {
       return NextResponse.json({ error: "selfieDataUrl is required" }, { status: 400 });
     }
-    const { buffer, contentType } = dataUrlToBuffer(body.selfieDataUrl);
+    const { buffer } = dataUrlToBuffer(body.selfieDataUrl);
     const hosted = await uploadToImgBb(buffer, "fitdna-skin.png");
 
     const result = await startSkinAnalysis(hosted.url, body.actions);

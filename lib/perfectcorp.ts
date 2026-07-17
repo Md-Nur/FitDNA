@@ -66,7 +66,7 @@ export async function startTryOn(
     garment_category: opts.garmentCategory ?? "auto",
   };
   if (category === "shoes") {
-    inner.style = opts.style ?? "casual";
+    inner.style = opts.style ?? "random";
     inner.gender = opts.gender ?? "female";
   }
 
@@ -107,7 +107,10 @@ export async function startTryOn(
  * Poll a running task. Caller is responsible for retry/backoff.
  */
 export async function getTryOnStatus(result: TryOnResult): Promise<TryOnStatus> {
-  const statusRes = await fetch(result.statusUrl, {
+  const statusUrl =
+    result.statusUrl ||
+    `${API_BASE}/s2s/v2.0/task/${result.category}/${result.taskId}`;
+  const statusRes = await fetch(statusUrl, {
     method: "GET",
     headers: authHeaders(),
   });
@@ -151,7 +154,7 @@ export async function startSkinAnalysis(
   const payload = {
     dst_actions: actions,
     format: "json",
-    body: { src_file_url: selfieUrl },
+    src_file_url: selfieUrl,
   };
 
   const taskRes = await fetch(`${API_BASE}/s2s/v2.0/task/skin-analysis`, {
@@ -188,7 +191,10 @@ export async function startSkinAnalysis(
  * Poll a Skin Analysis task. Returns the raw `score_info` when format=json.
  */
 export async function getSkinStatus(result: SkinResult): Promise<SkinStatus> {
-  const statusRes = await fetch(result.statusUrl, {
+  const statusUrl =
+    result.statusUrl ||
+    `${API_BASE}/s2s/v2.0/task/skin-analysis/${result.taskId}`;
+  const statusRes = await fetch(statusUrl, {
     method: "GET",
     headers: authHeaders(),
   });
