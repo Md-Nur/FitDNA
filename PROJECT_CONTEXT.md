@@ -49,20 +49,23 @@
 - **MIRROR gotcha (still valid):** Perfect Corp needs a **public, reachable image URL** for source/reference images when not uploading. Dev plan: upload via File API from the server (server has outbound net), OR run behind ngrok. For the demo, server-side upload avoids the public-URL problem entirely.
 - **Rate limits:** 100 req / 5 min per IP, 100 req / min per token — both must hold. Budget the 1,000 free units.
 
-## 3. Idea direction — **LOCKED 2026-07-17**
+## 3. Idea direction — **LOCKED 2026-07-17 (expanded 2026-07-17 to include Skin AI)**
 
-**Locked direction: A + light B (Fit Confidence Score core, with a light Wardrobe/Style Profile layer).**
+**Locked direction: A + light B, now spanning BOTH Apparel VTO and Skin AI tracks.**
 
-The hackathon thesis is *"will this fit, will this look right, is it worth the return shipping — replace that guess with confidence."* Straight visual try-on alone is the "obvious" use judges said they're tired of, so FitDNA pairs the YouCam Apparel VTO render with a **Fit Confidence Score** computed on top:
+The hackathon brief is *"will this fit, will this look right, is it worth the return shipping — replace that guess with confidence."* Straight visual try-on alone is the "obvious" use judges said they're tired of. FitDNA pairs the YouCam APIs with scoring layers on top:
 
-- **Core (A — Fit Confidence Score):** Upload a selfie + a garment product image. YouCam generates the try-on render. FitDNA then estimates the user's body proportions from the selfie, normalizes the garment's brand size chart to a common scheme, and outputs a **0–100 Fit Confidence Score** with a recommended size and plain-language reasoning (e.g. "size M: 92% confident — your shoulders are within brand tolerance, but hips run tight; consider sizing up if between sizes"). This is the non-obvious layer judges want — real logic on top of the single API call.
-- **Light B (Wardrobe / Style Profile):** The app remembers each user's saved body profile + past try-ons/sizes/keep-or-reject decisions in `localStorage` (no backend DB needed for a hackathon), and surfaces an evolving "Fit Profile" — what sizes/brands tend to fit them, what they've tried, what they kept. Demo-able delight, low extra scope.
+- **Core (A — Fit Confidence Score):** Upload a selfie + a garment product image. YouCam generates the try-on render (Clothes + Shoes). FitDNA estimates the user's body proportions, normalizes the garment's brand size chart to a common scheme, and outputs a **0–100 Fit Confidence Score** with a recommended size and plain-language reasoning. The non-obvious layer judges want — real logic on top of the API call.
+- **Skin AI (added feature):** Upload a selfie → YouCam **Skin AI** (`/task/skin-analysis`) scores wrinkles, pores, oiliness, radiance, dark circles, moisture, eye bags, age spots, redness, and skin type. FitDNA's `lib/skinscore.ts` translates the raw `score_info` into a **Skin Confidence summary** (0–100 overall + per-concern bars + product-direction advice). Same "score on top of the API" pattern, applied to skincare — so users buy products that fit their face, not the hype.
+- **Light B (Wardrobe / Style Profile):** The app remembers each user's past try-ons/sizes/keep-or-reject decisions in `localStorage` and surfaces an evolving "Fit Profile" — what sizes/brands tend to fit them, what they've tried, what they kept.
 
-**Garment scope (locked):** Clothes + Shoes. Both supported end-to-end; bags/jewelry deferred.
+**Multi-page structure (locked):** `/` landing (hero + "what it does"), `/try-on` (Apparel VTO + Fit Confidence), `/skin` (Skin AI analysis), `/profile` (Fit Profile / wardrobe memory). Shared `Nav` in `layout.tsx`.
+
+**Garment scope (locked):** Clothes + Shoes. **Skin scope (locked):** Skin AI (SD feature set). Both Apparel + Skin tracks entered.
 **Submission type (locked):** Solo.
-**Name:** FitDNA — your genetic fit signature, decoded.
+**Name:** FitDNA — your genetic fit (and skin) signature, decoded.
 
-Why this pick: it's the most defensible under "Potential Impact" + "Quality of the Idea" because the value isn't just *seeing* the garment — it's the confidence number solving the return-shipping problem the hackathon names outright, and the score logic is clearly more than a wrapper.
+Why this pick: it's the most defensible under "Potential Impact" + "Quality of the Idea" because the value isn't just *seeing* the garment or *seeing* a skin mask — it's the confidence number solving the return-shipping / wrong-product problem the hackathon names, and the scoring logic is clearly more than a wrapper.
 
 ## 4. Tech stack (locked — confirm/adjust)
 
@@ -94,3 +97,4 @@ Why this pick: it's the most defensible under "Potential Impact" + "Quality of t
 - 2026-07-17 — Context doc created. Project named FitDNA. Track: Apparel VTO. API key + secret key generated (stored via env vars, not in repo). Idea direction not yet locked (leaning A: Fit Confidence Score).
 - 2026-07-17 — **Idea LOCKED: A + light B** (Fit Confidence Score + light Wardrobe/Style Profile). Scope locked: Clothes + Shoes, solo. Verified live API facts: V2.0, `Bearer <API_KEY>` auth (old v1 client_id/id_token flow was WRONG), host `yce-api-01.perfectcorp.com`, endpoints `file/{cloth,shoes}` + `task/{cloth,shoes}` + `task/{feature}/{task_id}`. Scaffolded Next.js 16 app present (default page). Next: create `.env.example`, server-side YouCam client lib, fit-scoring logic, API routes, UI, README; run lint+build.
 - 2026-07-17 — **Scaffold complete & building.** Created `lib/perfectcorp.ts` (V2 client: file upload, start task, poll), `lib/fitscore.ts` (cloth + shoe confidence scoring w/ sample brand charts), `lib/profile.ts` (localStorage Fit Profile). Added routes `/api/tryon`, `/api/tryon/status`, `/api/fitscore`. Rebuilt `app/page.tsx` as full client flow (upload → render → score → profile). Rewrote README as self-sufficient judge doc. `npm run lint` clean, `npm run build` passes. **Blocked on real `PERFECTCORP_API_KEY` in `.env`** to test live try-on end-to-end. Next: add real key, smoke-test `/api/tryon` with a selfie+garment, then record demo video + screenshots.
+- 2026-07-17 — **Live API integration debugged (real key present).** Key findings vs docs: (1) File API response nests `files[]` under `data`, not top-level — fixed parser. (2) Task API (`POST /task/cloth`) REJECTS the `source_file_id`/`reference_file_id` (file_id) variant for this account; it requires **public URLs**: `src_file_url` + `ref_file_url` + `garment_category` (flat payload, NOT wrapped in `body` — the `body` wrapper causes 400). (3) Switched image hosting to **ImgBB** (`lib/imgbb.ts`) — selfie+garment uploaded there, public URLs passed to YouCam. After payload fix, call reaches the API and now returns **`CreditInsufficiency`** → the account has 0 units; the 1,000 free Devpost units must be redeemed in the Perfect Corp console (Account > Redeem Code). Once credits are active, end-to-end try-on should succeed.

@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  uploadImage,
-  startTryOn,
-  type GarmentCategory,
-} from "@/lib/perfectcorp";
+import { startTryOn, type GarmentCategory } from "@/lib/perfectcorp";
+import { uploadToImgBb } from "@/lib/imgbb";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 interface TryOnBody {
   category: GarmentCategory;
-  // images as data URLs (base64). For dev simplicity we accept data URLs and
-  // decode to buffers, then upload server-side so the API never needs a public URL.
+  // images as data URLs (base64). Decoded to buffers, hosted on ImgBB for a
+  // public URL (YouCam's task API needs a publicly reachable source/reference).
   selfieDataUrl: string;
   garmentDataUrl: string;
   style?: string;
@@ -41,17 +38,18 @@ export async function POST(req: NextRequest) {
     const selfie = dataUrlToBuffer(body.selfieDataUrl);
     const garment = dataUrlToBuffer(body.garmentDataUrl);
 
-    // Upload both images server-side.
-    const [sourceFileId, referenceFileId] = await Promise.all([
-      uploadImage(category, selfie.buffer, selfie.contentType),
-      uploadImage(category, garment.buffer, garment.contentType),
+    // Host both images on ImgBB so YouCam can fetch them via public URL.
+    const [selfieHosted, garmentHosted] = await Promise.all([
+      uploadToImgBb(selfie.buffer, "fitdna-selfie.png"),
+      uploadToImgBb(garment.buffer, "fitdna-garment.png"),
     ]);
 
     const result = await startTryOn(category, {
-      sourceFileId,
-      referenceFileId,
+      sourceFileUrl: selfieHosted.url,
+      referenceFileUrl: garmentHosted.url,
       style: body.style,
       gender: body.gender,
+      garmentCategory: "auto",
     });
 
     return NextResponse.json({ taskId: result.taskId, category });

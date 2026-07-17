@@ -14,6 +14,19 @@ export interface TryOnStatus {
   error?: string;
 }
 
+export interface SkinResult {
+  taskId: string;
+  statusUrl: string;
+}
+
+export interface SkinStatus {
+  taskStatus: "pending" | "processing" | "success" | "error";
+  // Raw score_info from the API when format=json
+  analysis?: Record<string, unknown>;
+  resultUrl?: string;
+  error?: string;
+}
+
 const API_BASE =
   process.env.PERFECTCORP_API_BASE?.replace(/\/$/, "") ||
   "https://yce-api-01.perfectcorp.com";
@@ -32,84 +45,32 @@ function authHeaders() {
 }
 
 /**
- * Upload a raw image buffer to the YouCam File API for the given feature.
- * Returns the file_id used to reference the image in a task.
- */
-export async function uploadImage(
-  category: GarmentCategory,
-  image: Buffer,
-  contentType: string,
-  fileName = "image.jpg",
-): Promise<string> {
-  const fileRes = await fetch(`${API_BASE}/s2s/v2.0/file/${category}`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({
-      files: [
-        {
-          content_type: contentType,
-          file_name: fileName,
-          file_size: image.byteLength,
-        },
-      ],
-    }),
-  });
-
-  if (!fileRes.ok) {
-    const text = await fileRes.text();
-    throw new Error(
-      `YouCam file API failed (${fileRes.status}): ${text.slice(0, 300)}`,
-    );
-  }
-
-  const fileJson = (await fileRes.json()) as {
-    files?: {
-      file_id?: string;
-      requests?: { url?: string; method?: string; headers?: Record<string, string> }[];
-    }[];
-  };
-  const first = fileJson.files?.[0];
-  const fileId = first?.file_id;
-  const uploadUrl = first?.requests?.[0]?.url;
-  if (!fileId || !uploadUrl) {
-    throw new Error("YouCam file API did not return file_id/upload URL.");
-  }
-
-  const putRes = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType, "Content-Length": String(image.byteLength) },
-    body: new Uint8Array(image),
-  });
-
-  if (!putRes.ok) {
-    const text = await putRes.text();
-    throw new Error(`YouCam upload failed (${putRes.status}): ${text.slice(0, 300)}`);
-  }
-
-  return fileId;
-}
-
-/**
- * Start an Apparel VTO task. For clothes we need a source (selfie) + reference
- * (garment). For shoes we additionally need style + gender.
+ * Start an Apparel VTO task using publicly reachable image URLs for the source
+ * (selfie) and reference (garment). The YouCam task API accepts this
+ * (src_file_url + ref_file_url + garment_category) shape reliably. ImgBB
+ * (lib/imgbb.ts) is used to host the images so they have public URLs.
  */
 export async function startTryOn(
   category: GarmentCategory,
   opts: {
-    sourceFileId: string;
-    referenceFileId: string;
+    sourceFileUrl: string;
+    referenceFileUrl: string;
     style?: string;
     gender?: "male" | "female";
+    garmentCategory?: "auto" | "full_body" | "lower_body" | "upper_body" | "shoes";
   },
 ): Promise<TryOnResult> {
-  const payload: Record<string, unknown> = {
-    source_file_id: opts.sourceFileId,
-    reference_file_id: opts.referenceFileId,
+  const inner: Record<string, unknown> = {
+    src_file_url: opts.sourceFileUrl,
+    ref_file_url: opts.referenceFileUrl,
+    garment_category: opts.garmentCategory ?? "auto",
   };
   if (category === "shoes") {
-    payload.style = opts.style ?? "casual";
-    payload.gender = opts.gender ?? "female";
+    inner.style = opts.style ?? "casual";
+    inner.gender = opts.gender ?? "female";
   }
+
+  const payload = inner;
 
   const taskRes = await fetch(`${API_BASE}/s2s/v2.0/task/${category}`, {
     method: "POST",
@@ -130,7 +91,9 @@ export async function startTryOn(
   };
   const taskId = taskJson.data?.task_id ?? taskJson.result?.task_id;
   if (!taskId) {
-    throw new Error("YouCam task API did not return task_id.");
+    throw new Error(
+      `YouCam task API did not return task_id. Body: ${JSON.stringify(taskJson).slice(0, 400)}`,
+    );
   }
 
   return {
@@ -162,12 +125,116 @@ export async function getTryOnStatus(result: TryOnResult): Promise<TryOnStatus> 
       result?: { url?: string };
       error?: string;
     };
+    task_status?: string;
+    result?: { url?: string };
+    error?: string;
   };
 
-  const status = (json.data?.task_status ?? "pending") as TryOnStatus["taskStatus"];
+  const data = json.data ?? json;
+  const status = (data.task_status ?? "pending") as TryOnStatus["taskStatus"];
   return {
     taskStatus: status,
-    resultUrl: json.data?.result?.url,
-    error: json.data?.error,
+    resultUrl: data.result?.url,
+    error: data.error,
   };
 }
+
+/**
+ * Start a Skin Analysis task. YouCam requires `dst_actions` (the features to
+ * analyze) and a publicly reachable selfie URL, wrapped in `body`. We request
+ * `format: "json"` so the scores come back inline (no ZIP to unpack).
+ */
+export async function startSkinAnalysis(
+  selfieUrl: string,
+  actions: string[] = DEFAULT_SKIN_ACTIONS,
+): Promise<SkinResult> {
+  const payload = {
+    dst_actions: actions,
+    format: "json",
+    body: { src_file_url: selfieUrl },
+  };
+
+  const taskRes = await fetch(`${API_BASE}/s2s/v2.0/task/skin-analysis`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!taskRes.ok) {
+    const text = await taskRes.text();
+    throw new Error(
+      `YouCam skin task API failed (${taskRes.status}): ${text.slice(0, 300)}`,
+    );
+  }
+
+  const taskJson = (await taskRes.json()) as {
+    data?: { task_id?: string };
+    result?: { task_id?: string };
+  };
+  const taskId = taskJson.data?.task_id ?? taskJson.result?.task_id;
+  if (!taskId) {
+    throw new Error(
+      `YouCam skin task API did not return task_id. Body: ${JSON.stringify(taskJson).slice(0, 400)}`,
+    );
+  }
+
+  return {
+    taskId,
+    statusUrl: `${API_BASE}/s2s/v2.0/task/skin-analysis/${taskId}`,
+  };
+}
+
+/**
+ * Poll a Skin Analysis task. Returns the raw `score_info` when format=json.
+ */
+export async function getSkinStatus(result: SkinResult): Promise<SkinStatus> {
+  const statusRes = await fetch(result.statusUrl, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+
+  if (!statusRes.ok) {
+    const text = await statusRes.text();
+    throw new Error(
+      `YouCam skin status API failed (${statusRes.status}): ${text.slice(0, 300)}`,
+    );
+  }
+
+  const json = (await statusRes.json()) as {
+    data?: {
+      task_status?: string;
+      result?: { url?: string };
+      score_info?: Record<string, unknown>;
+      error?: string;
+    };
+    task_status?: string;
+    result?: { url?: string };
+    score_info?: Record<string, unknown>;
+    error?: string;
+  };
+
+  const data = json.data ?? json;
+  const status = (data.task_status ?? "pending") as SkinStatus["taskStatus"];
+  return {
+    taskStatus: status,
+    analysis: data.score_info,
+    resultUrl: data.result?.url,
+    error: data.error,
+  };
+}
+
+// SD features — a solid, broadly useful set without mixing HD/SD.
+export const DEFAULT_SKIN_ACTIONS = [
+  "wrinkle",
+  "pore",
+  "texture",
+  "acne",
+  "oiliness",
+  "radiance",
+  "dark_circle_v2",
+  "eye_bag",
+  "age_spot",
+  "redness",
+  "moisture",
+  "skin_type",
+];
