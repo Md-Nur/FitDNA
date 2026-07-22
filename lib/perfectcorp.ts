@@ -125,122 +125,25 @@ export async function getTryOnStatus(result: TryOnResult): Promise<TryOnStatus> 
   const json = (await statusRes.json()) as {
     data?: {
       task_status?: string;
-      result?: { url?: string };
+      results?: { url?: string };
       error?: string;
     };
     task_status?: string;
-    result?: { url?: string };
+    results?: { url?: string };
     error?: string;
   };
 
   const data = json.data ?? json;
   const status = (data.task_status ?? "pending") as TryOnStatus["taskStatus"];
+  const resultUrl =
+    typeof data.results === "string"
+      ? data.results
+      : data.results?.url;
+
   return {
     taskStatus: status,
-    resultUrl: data.result?.url,
+    resultUrl,
     error: data.error,
   };
 }
 
-/**
- * Start a Skin Analysis task. YouCam requires `dst_actions` (the features to
- * analyze) and a publicly reachable selfie URL, wrapped in `body`. We request
- * `format: "json"` so the scores come back inline (no ZIP to unpack).
- */
-export async function startSkinAnalysis(
-  selfieUrl: string,
-  actions: string[] = DEFAULT_SKIN_ACTIONS,
-): Promise<SkinResult> {
-  const payload = {
-    dst_actions: actions,
-    format: "json",
-    src_file_url: selfieUrl,
-  };
-
-  const taskRes = await fetch(`${API_BASE}/s2s/v2.0/task/skin-analysis`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
-  });
-
-  if (!taskRes.ok) {
-    const text = await taskRes.text();
-    throw new Error(
-      `YouCam skin task API failed (${taskRes.status}): ${text.slice(0, 300)}`,
-    );
-  }
-
-  const taskJson = (await taskRes.json()) as {
-    data?: { task_id?: string };
-    result?: { task_id?: string };
-  };
-  const taskId = taskJson.data?.task_id ?? taskJson.result?.task_id;
-  if (!taskId) {
-    throw new Error(
-      `YouCam skin task API did not return task_id. Body: ${JSON.stringify(taskJson).slice(0, 400)}`,
-    );
-  }
-
-  return {
-    taskId,
-    statusUrl: `${API_BASE}/s2s/v2.0/task/skin-analysis/${taskId}`,
-  };
-}
-
-/**
- * Poll a Skin Analysis task. Returns the raw `score_info` when format=json.
- */
-export async function getSkinStatus(result: SkinResult): Promise<SkinStatus> {
-  const statusUrl =
-    result.statusUrl ||
-    `${API_BASE}/s2s/v2.0/task/skin-analysis/${result.taskId}`;
-  const statusRes = await fetch(statusUrl, {
-    method: "GET",
-    headers: authHeaders(),
-  });
-
-  if (!statusRes.ok) {
-    const text = await statusRes.text();
-    throw new Error(
-      `YouCam skin status API failed (${statusRes.status}): ${text.slice(0, 300)}`,
-    );
-  }
-
-  const json = (await statusRes.json()) as {
-    data?: {
-      task_status?: string;
-      result?: { url?: string };
-      score_info?: Record<string, unknown>;
-      error?: string;
-    };
-    task_status?: string;
-    result?: { url?: string };
-    score_info?: Record<string, unknown>;
-    error?: string;
-  };
-
-  const data = json.data ?? json;
-  const status = (data.task_status ?? "pending") as SkinStatus["taskStatus"];
-  return {
-    taskStatus: status,
-    analysis: data.score_info,
-    resultUrl: data.result?.url,
-    error: data.error,
-  };
-}
-
-// SD features — a solid, broadly useful set without mixing HD/SD.
-export const DEFAULT_SKIN_ACTIONS = [
-  "wrinkle",
-  "pore",
-  "texture",
-  "acne",
-  "oiliness",
-  "radiance",
-  "dark_circle_v2",
-  "eye_bag",
-  "age_spot",
-  "redness",
-  "moisture",
-  "skin_type",
-];

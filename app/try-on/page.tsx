@@ -258,26 +258,29 @@ export default function TryOnPage() {
           return;
         }
         clearInterval(pollRef.current!);
-        // The generated image is re-hosted to ImgBB behind the scenes in the
-        // status route; prefer that stable ImgBB URL, fall back to YouCam's
-        // own result URL only if ImgBB didn't return one.
+        console.log("status response:", status);
         setRenderUrl(status.hostedUrl ?? status.resultUrl ?? "");
         setStatusText("Scoring the fit…");
-        const v = await computeVerdict();
-        setVerdict(v);
-        setPhase("done");
-        persist(
-          history.map((h) =>
-            h.id === entryId
-              ? {
-                  ...h,
-                  recommendedSize: v.recommendedSize,
-                  confidence: v.confidence,
-                  resultUrl: status.hostedUrl ?? status.resultUrl ?? h.resultUrl,
-                }
-              : h,
-          ),
-        );
+        try {
+          const v = await computeVerdict();
+          setVerdict(v);
+          setPhase("done");
+          persist(
+            history.map((h) =>
+              h.id === entryId
+                ? {
+                    ...h,
+                    recommendedSize: v.recommendedSize,
+                    confidence: v.confidence,
+                    resultUrl: status.hostedUrl ?? status.resultUrl ?? h.resultUrl,
+                  }
+                : h,
+            ),
+          );
+        } catch {
+          setError("Fit scoring failed. Please try again.");
+          setPhase("error");
+        }
       }, 3000);
     } catch {
       setPhase("error");
@@ -509,12 +512,6 @@ function ResultPanel({
               />
             </div>
             <div className="flex flex-col items-center">
-              {verdict && <ScoreRing value={verdict.confidence} label="Fit" />}
-              {verdict && (
-                <div className="mt-1 text-lg font-semibold">
-                  Size: {verdict.recommendedSize}
-                </div>
-              )}
               <div className="mt-3 flex gap-2">
                 {selfiePreview && (
                 <SmartImg
@@ -535,16 +532,27 @@ function ResultPanel({
               </div>
             </div>
           </div>
-          {verdict && (
-            <ul className="mt-4 space-y-1 text-sm text-white/70">
-              {verdict.reasons.map((r, i) => (
-                <li key={i}>• {r}</li>
-              ))}
-            </ul>
-          )}
-          {verdict && (
-            <div className="mt-4 flex gap-2">
-              {verdict.perSize.map((s) => (
+        </div>
+      ) : (
+        <div className="py-6 text-center text-sm text-white/50">
+          The try-on finished but the generated image URL was not returned.
+        </div>
+      )}
+      {verdict && (
+        <div className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-center gap-5">
+            <ScoreRing value={verdict.confidence} label="Fit" />
+            <div className="text-lg font-semibold">
+              Size: {verdict.recommendedSize}
+            </div>
+          </div>
+          <ul className="space-y-1 text-sm text-white/70">
+            {verdict.reasons.map((r, i) => (
+              <li key={i}>• {r}</li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            {verdict.perSize.map((s) => (
               <div key={s.size} className="flex-1 text-center">
                 <div className="text-xs text-white/50">{s.size}</div>
                 <div className="h-1.5 rounded bg-white/10">
@@ -556,11 +564,6 @@ function ResultPanel({
               </div>
             ))}
           </div>
-          )}
-        </div>
-      ) : (
-        <div className="py-6 text-center text-sm text-white/50">
-          The try-on finished but the generated image URL was not returned.
         </div>
       )}
       {renderUrl && (
