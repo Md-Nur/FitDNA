@@ -99,6 +99,8 @@ export default function TryOnPage() {
     }
   });
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const historyRef = useRef(history);
+  historyRef.current = history;
 
   const persist = useCallback((next: HistoryItem[]) => {
     setHistory(next);
@@ -258,21 +260,20 @@ export default function TryOnPage() {
           return;
         }
         clearInterval(pollRef.current!);
-        console.log("status response:", status);
-        setRenderUrl(status.hostedUrl ?? status.resultUrl ?? "");
+        setRenderUrl(status.resultUrl ?? "");
         setStatusText("Scoring the fit…");
         try {
           const v = await computeVerdict();
           setVerdict(v);
           setPhase("done");
           persist(
-            history.map((h) =>
+            historyRef.current.map((h) =>
               h.id === entryId
                 ? {
                     ...h,
                     recommendedSize: v.recommendedSize,
                     confidence: v.confidence,
-                    resultUrl: status.hostedUrl ?? status.resultUrl ?? h.resultUrl,
+                    resultUrl: status.resultUrl ?? h.resultUrl,
                   }
                 : h,
             ),
@@ -564,19 +565,6 @@ function ResultPanel({
               </div>
             ))}
           </div>
-        </div>
-      )}
-      {renderUrl && (
-        <div className="mt-3 break-all text-xs text-white/40">
-          <span className="text-white/60">Generated image: </span>
-          <a
-            href={renderUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-accent"
-          >
-            {renderUrl}
-          </a>
         </div>
       )}
     </div>
