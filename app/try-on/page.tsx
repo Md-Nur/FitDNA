@@ -218,10 +218,10 @@ export default function TryOnPage() {
       if (!startRes.ok) {
         throw new Error("start");
       }
-      const { taskId } = await startRes.json();
+      const { taskId, selfieUrl, garmentUrl } = await startRes.json();
 
-      // Save a history entry immediately (with thumbnails) so it persists even
-      // if the try-on later fails. We update confidence/result on success.
+      // Save a history entry immediately with permanent ImgBB URLs (already
+      // uploaded — they were needed for YouCam, no extra wait).
       const entryId = crypto.randomUUID();
       persist([
         {
@@ -230,8 +230,8 @@ export default function TryOnPage() {
           category,
           brand,
           garmentLabel: garment!.name,
-          selfieThumb: selfiePreview,
-          garmentThumb: garmentPreview,
+          selfieThumb: selfieUrl,
+          garmentThumb: garmentUrl,
           recommendedSize: "—",
           confidence: 0,
           decided: "undecided",

@@ -52,7 +52,12 @@ export async function POST(req: NextRequest) {
       garmentCategory: "auto",
     });
 
-    return NextResponse.json({ taskId: result.taskId, category });
+    return NextResponse.json({
+      taskId: result.taskId,
+      category,
+      selfieUrl: selfieHosted.url,
+      garmentUrl: garmentHosted.url,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
