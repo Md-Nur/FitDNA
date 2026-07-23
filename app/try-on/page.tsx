@@ -311,7 +311,7 @@ export default function TryOnPage() {
                 <button
                   key={c}
                   onClick={() => setCategory(c)}
-                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm capitalize ${
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm capitalize ${
                     category === c ? "bg-accent text-white" : "bg-white/10"
                   }`}
                 >
@@ -371,7 +371,7 @@ export default function TryOnPage() {
                 <button
                   key={u}
                   onClick={() => setUnit(u)}
-                  className={`rounded-full px-3 py-1 text-xs ${
+                  className={`rounded-full px-3 py-2 text-xs ${
                     unit === u ? "bg-accent text-white" : "bg-white/10"
                   }`}
                 >
@@ -380,7 +380,7 @@ export default function TryOnPage() {
               ))}
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
               <Num label={`Bust (${unit})`} v={body.bust} set={(v) => setBody({ ...body, bust: v })} />
               <Num label={`Waist (${unit})`} v={body.waist} set={(v) => setBody({ ...body, waist: v })} />
               <Num label={`Hips (${unit})`} v={body.hips} set={(v) => setBody({ ...body, hips: v })} />
@@ -410,7 +410,7 @@ export default function TryOnPage() {
                 >
                   {SHOE_STYLES.map((s) => (
                     <option key={s} value={s} className="text-black">
-                      {s}
+                      {s.replace("style_", "").replace(/_/g, " ")}
                     </option>
                   ))}
                 </select>

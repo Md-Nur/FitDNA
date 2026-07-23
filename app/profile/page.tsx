@@ -71,7 +71,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-10">
+    <main className="mx-auto max-w-5xl px-5 py-10">
       <header className="mb-8">
         <div className="flex items-center gap-2 text-sm text-accent">
           <IconProfile className="h-4 w-4" /> Your FitDNA
@@ -104,7 +104,7 @@ export default function ProfilePage() {
                     <button
                       key={f}
                       onClick={() => setFilter(f)}
-                      className={`rounded-full px-4 py-1.5 text-xs capitalize ${
+                      className={`rounded-full px-4 py-2.5 text-xs capitalize ${
                         filter === f ? "bg-accent text-white" : "bg-white/10"
                       }`}
                     >
@@ -180,7 +180,7 @@ export default function ProfilePage() {
                 <div className="mt-4 flex gap-2">
                   <button
                     onClick={() => setDecision(h.id, "kept")}
-                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                    className={`flex-1 rounded-lg px-3 py-3 text-sm font-medium transition ${
                       h.decided === "kept"
                         ? "bg-accent-2 text-black"
                         : "bg-white/10 hover:bg-white/20"
@@ -190,7 +190,7 @@ export default function ProfilePage() {
                   </button>
                   <button
                     onClick={() => setDecision(h.id, "rejected")}
-                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                    className={`flex-1 rounded-lg px-3 py-3 text-sm font-medium transition ${
                       h.decided === "rejected"
                         ? "bg-red-500 text-white"
                         : "bg-white/10 hover:bg-white/20"
