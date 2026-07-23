@@ -87,7 +87,7 @@ export function ErrorBox({ raw, onRetry }: { raw?: string; onRetry?: () => void 
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-3 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-100 hover:bg-red-500/30"
+          className="mt-3 rounded-lg bg-red-500/20 px-3 py-2.5 text-xs font-medium text-red-100 hover:bg-red-500/30"
         >
           Try again
         </button>
