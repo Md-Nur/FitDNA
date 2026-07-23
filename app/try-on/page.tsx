@@ -145,7 +145,7 @@ export default function TryOnPage() {
           waist: toCm(body.waist, unit),
           hips: toCm(body.hips, unit),
           shoulder: toCm(body.shoulder, unit),
-          height: body.height ? Number(body.height) : undefined,
+          height: toCm(body.height, unit),
           footLength: toCm(body.footLength, unit),
         },
       }),
@@ -385,7 +385,7 @@ export default function TryOnPage() {
               <Num label={`Waist (${unit})`} v={body.waist} set={(v) => setBody({ ...body, waist: v })} />
               <Num label={`Hips (${unit})`} v={body.hips} set={(v) => setBody({ ...body, hips: v })} />
               <Num label={`Shoulder (${unit})`} v={body.shoulder} set={(v) => setBody({ ...body, shoulder: v })} />
-              <Num label="Height (cm)" v={body.height} set={(v) => setBody({ ...body, height: v })} />
+              <Num label={`Height (${unit})`} v={body.height} set={(v) => setBody({ ...body, height: v })} />
               <Num
                 label={category === "shoes" ? `Foot length (${unit})` : `Foot (${unit})`}
                 v={body.footLength}

@@ -135,7 +135,7 @@ export default function ProfilePage() {
             {filtered.map((h) => (
               <div
                 key={h.id}
-                className="glass rounded-2xl p-5"
+                className="glass rounded-2xl p-5 max-w-sm transition hover:scale-[1.01] hover:bg-white/5"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2 text-sm">
