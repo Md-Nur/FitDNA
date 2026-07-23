@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: "FitDNA — Decode your fit before you buy",
   description:
     "FitDNA pairs YouCam Apparel Virtual Try-On with a Fit Confidence Score so you buy with certainty and skip return shipping.",
+  icons: { icon: "/icon.png" },
 };
 
 export default function RootLayout({
